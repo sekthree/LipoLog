@@ -93,6 +93,18 @@ local page
 --	the plus and/or minus remote buttons
 --
 ----------------------------------------------------------------------
+local function round(num,decimal)
+	local mult = 10^(decimal or 0)
+	return math.floor(num * mult + 0.5) / mult
+end --[[round]]
+
+----------------------------------------------------------------------
+-- Function: valueIncDec
+-- Parameters: event, min, max, step
+-- Desc: traverses through availble letters for Lipo Label/name assignment using
+--	the plus and/or minus remote buttons
+--
+----------------------------------------------------------------------
 local function valueIncDec(event,min,max,step)
  
 	local letters = {' ','A','B','C','D','E','F','G','H','I','J','K','L','M','N','O','P','Q','R','S','T','U','V','W','X','Y','Z'}
@@ -226,7 +238,7 @@ local function writeFlightLog()
 	local telemetryVals = ""
 
 	if VFASval ~= nil or VFASval > 0 then
-		telemetryVals = ",VFAS: "..VFASval
+		telemetryVals = ",VFAS: "..round(VFASval,2)
 	end
 
 	if cellId ~= -1 then
@@ -234,7 +246,7 @@ local function writeFlightLog()
 		if (type(cellResult) == "table") then
 			cellValue = ""
 			for i,v in ipairs(cellResult) do
-				cellValue = cellValue .. v .. " "
+				cellValue = cellValue .. round(v,2) .. " "
 				cellSum = cellSum + v
 			end
 			telemetryVals = telemetryVals..",Cels: "..cellValue.. " = "..cellSum
@@ -528,8 +540,7 @@ local function deleteLipoData()
 	
 	if liposFile ~= nil then io.close(liposFile) end
 
-	lipoCount = 0
-	lipoPacks = {}
+	loadData()
 end
 
 ----------------------------------------------------------------------
