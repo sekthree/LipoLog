@@ -87,10 +87,9 @@ local lineFive
 local page
 
 ----------------------------------------------------------------------
--- Function: valueIncDec
--- Parameters: event, min, max, step
--- Desc: traverses through availble letters for Lipo Label/name assignment using
---	the plus and/or minus remote buttons
+-- Function: round
+-- Parameters: num, decimal
+-- Desc: rounds number passed in to decimal place passed in.
 --
 ----------------------------------------------------------------------
 local function round(num,decimal)
