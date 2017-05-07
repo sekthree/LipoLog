@@ -1,5 +1,5 @@
 ---------------------------------------------------------------------------------------------
----------						LipoLog v1.0                                  ---------------
+---------						LipoLog v1.1                                  ---------------
 ---------------------------------------------------------------------------------------------
 --	File: LipoLog.lua
 --	Date: April 20, 2017
@@ -450,7 +450,7 @@ local function viewLog(scroll)
 		pageCount = prevPage%nextPage.."/"..page
 		
 	else --File not successfully opened or no records to display
-		currentMenu = 'logMenu'
+		currentMenu = 'mainScreen'
 		activeField = 1
 	end
 end--[[viewLog]]
@@ -543,70 +543,66 @@ local function deleteLipoData()
 end
 
 ----------------------------------------------------------------------
--- Function: mainMenu
+-- Function: menuScreen
 -- Parameters: event
 -- Desc: Handles variables to be displayed on main menu. Passes control
 --	to sub menus by setting currentMenu flag to menu that should be visible
 --
 ----------------------------------------------------------------------
-local function mainMenu(event)
-	
-	lineOne = 'Lipo:   '
-	lineTwo = 'Add Entry->'
-	
-	if lipoCount <= 0 then
-		lineThree   = ''
-		lineFour    = ''
-		fieldMax    = 1
-		activeField = 1
-	else
-		lineThree = 'Delete ->'
-		lineFour  = 'Log ->'
-		fieldMax  = 3
+local function menuScreen(event)
+
+	if exitMenu(event) then
+		currentMenu = "mainScreen"
+		activeField = 0
 	end
+	
+	lineOne = 'View Flight Logs ->'
+	lineTwo = 'Add New Lipo Pack ->'
+	lineThree = "Delete Things ->"
+	lineFour = ""
+	fieldMax = 2
 	
 	if editMode then
 		if activeField == 0 then
-		  selectedOption = fieldIncDec(event, selectedOption, lipoCount - 1)		  
-		  if selectedOption >= lipoCount then selectedOption = lipoCount - 1 end
+			editMode = not editMode
+			currentMenu = 'logView'
+			activeField = 0
+			loadRecordPositions()
+			viewLog('down')
 		elseif activeField == 1 then
 			editMode = not editMode
 			currentMenu = 'addEntry'
 			activeField = 0
 		elseif activeField == 2 then
 			editMode = not editMode
-			currentMenu = 'deleteEntry'
+			currentMenu = 'deleteScreen'
 			activeField = 0
 			selectedOption = 0
-		elseif activeField == 3 then
-			editMode = not editMode
-			currentMenu = 'logMenu'
-			activeField = 0
 		end
 	else
 		activeField = fieldIncDec(event, activeField, fieldMax, true)
 	end
-end--[[mainMenu]]
+end--[[menuScreen]]
 
 ----------------------------------------------------------------------
--- Function: addEntryMenu
+-- Function: addLipoScreen
 -- Parameters: event
 -- Desc: Handles variables to be displayed on Add Entry menu. Can write
 --	new lipo entry by calling writeData function.
 --
 ----------------------------------------------------------------------
-local function addEntryMenu(event)
+local function addLipoScreen(event)
 
 	--Exit to top menu if exit is pressed
 	if exitMenu(event) then
-		editMode = not editMode
-		activeField = 2
+		currentMenu = "menuScreen"
+		activeField = 1
 	end
 	
 	lineOne   = 'Name: '
-	lineThree = '<- Back'
+	lineThree = ''
 	lineFour  = ''
-	fieldMax  = 2
+	fieldMax  = 1
 	
 	if letter == nil or letter == " " then
 		lineTwo = ''
@@ -622,37 +618,33 @@ local function addEntryMenu(event)
 			writeData(letter)
 			loadData()
 			editMode = not editMode
-			currentMenu = 'mainMenu'
+			currentMenu = 'menuScreen'
 			activeField = 0
-		elseif activeField == 2 then
-			editMode = not editMode
-			currentMenu = 'mainMenu'
-			activeField = 1
 		end
 	else
 		activeField = fieldIncDec(event,activeField, fieldMax, true)
 	end
-end--[[addEntryMenu]]
+end--[[addLipoScreen]]
 
 -----------------------------------------------------------------
---	Function: deleteEntryMenu
+--	Function: deleteScreen
 --	Parameters: event	
 --	Desc: Changes values referenced in draw to display the delete entry screen, 
 --	  handles variables needed to delete an entry from comboBox
 --
 -----------------------------------------------------------------
-local function deleteEntryMenu(event)
+local function deleteScreen(event)
 
 	--Exit to top menu if exit is pressed
 	if exitMenu(event) then
-		editMode = not editMode
-		activeField = 3
+		currentMenu = "menuScreen"
+		activeField = 2
 	end
 	
 	lineOne   = 'Select to Delete: '
-	lineTwo   = 'Delete Entry'
-	lineThree = 'Delete ALL Entries'
-	lineFour  = '<- Back'
+	lineTwo   = 'Delete Selected Lipo'
+	lineThree = 'Delete ALL Lipos'
+	lineFour  = 'Delete ALL Flight Logs'
 	fieldMax  = 3
 	
 	if editMode then
@@ -661,71 +653,69 @@ local function deleteEntryMenu(event)
 			if selectedOption >= lipoCount then selectedOption = lipoCount - 1 end
 		elseif activeField == 1 then
 			editMode = not editMode
-			currentMenu = 'mainMenu'
 			removeData(lipoPacks[selectedOption+1])
+			currentMenu = 'menuScreen'
 			selectedOption = 0
 		elseif activeField == 2 then
 			editMode = not editMode
-			currentMenu = 'mainMenu'
-			activeField = 0
 			deleteLipoData()
+			currentMenu = 'menuScreen'
+			activeField = 0
 		elseif activeField == 3 then
 			editMode = not editMode
-			currentMenu = 'mainMenu'
+			deleteFlightLogs()
+			currentMenu = 'menuScreen'
 			activeField = 2
 		end
 	else
 		activeField = fieldIncDec(event, activeField, fieldMax, true)
 	end
-end--[[deleteEntryMenu]]
+end--[[deleteScreen]]
 
 -------------------------------------------------------------------
--- Function: logMenu
+-- Function: mainScreen
 -- Parameters: event
 -- Desc: Handles variables to be displayed on log menu. Can write telemetry
 --	data record to log by calling writeFlightLog function. Can delete log
 --	file by calling deleteFlightLogs function. 
 --
 -------------------------------------------------------------------
-local function logMenu(event)
+local function mainScreen(event)
 	
 	--Exit to top menu if exit is pressed
-	if exitMenu(event) then
-		editMode = not editMode
-		activeField = 3
+	if event == EVT_MENU_BREAK then
+		currentMenu = "menuScreen"
 	end
 	
-	lineOne   = 'Write Log Entry'
-	lineTwo   = 'View Logs'
-	lineThree = 'Delete ALL Logs'
-	lineFour  = '<- Back'
-	fieldMax  = 3
+	if lipoCount <= 0 then
+		fieldMax    = 0
+		activeField = 0
+		lineOne = ""
+		lineTwo = ""
+		lineThree = "Please add a lipo pack"
+	else
+		lineOne   = 'Lipo Pack: '
+		lineTwo   = 'Write Flight Log'
+		fieldMax  = 1
+		lineThree = ""
+	end
+	
+	lineFour  = ""
 	
 	if editMode then
 		if activeField == 0 then
-			editMode = not editMode
-			currentMenu = 'logMenu'
-			activeField = 1
-			writeFlightLog()
+		  selectedOption = fieldIncDec(event, selectedOption, lipoCount - 1)		  
+		  if selectedOption >= lipoCount then selectedOption = lipoCount - 1 end
 		elseif activeField == 1 then
 			editMode = not editMode
-			currentMenu = 'logView'
-			activeField = 0
-			loadRecordPositions()
-			viewLog('down')			
-		elseif activeField == 2 then
-			editMode = not editMode
-			deleteFlightLogs()
-			activeField = 3
-		elseif activeField == 3 then
-			editMode = not editMode
-			currentMenu = 'mainMenu'
-			activeField = 3
+			writeFlightLog()
+			currentMenu = "mainScreen"
+			activeField = 1
 		end
 	else
 		activeField = fieldIncDec(event, activeField, fieldMax, true)
 	end
-end--[[logMenu]]
+end--[[mainScreen]]
 
 ---------------------------------------------------------------
 -- Function: draw
@@ -736,20 +726,23 @@ end--[[logMenu]]
 ---------------------------------------------------------------
 local function draw(currentMenu)
 
+ if currentMenu == "mainScreen" then
+	lcd.drawText(40, 55, "Press [MENU] for Options",0)
+ end
   -- draw from the bottom up so we don't overwrite the combo box if open
-  lcd.drawText(1, 38, lineFour, getFieldFlags(3)) -- LogMenu
-  lcd.drawText(1, 26, lineThree, getFieldFlags(2)) --DeleteMenu, <-Back
-  lcd.drawText(1, 14, lineTwo, getFieldFlags(1)) --AddEntryMenu, Confirm, Delete
+  lcd.drawText(3, 40, lineFour, getFieldFlags(3)) -- mainScreen
+  lcd.drawText(3, 28, lineThree, getFieldFlags(2)) --DeleteMenu
+  lcd.drawText(3, 16, lineTwo, getFieldFlags(1)) --addLipoScreen, Confirm, Delete
   
-  if currentMenu == "logMenu" then
-	lcd.drawText(1,1,lineOne,getFieldFlags(0)) --Write To Log
+  if currentMenu == "menuScreen" then
+	lcd.drawText(3,3,lineOne,getFieldFlags(0)) --ViewLogs
   else
-	lcd.drawText(1, 1, lineOne, 0) --Lipo, Select to Delete, Name:
+	lcd.drawText(3, 3, lineOne, 0) --Lipo, Select to Delete, Name:
   end
   
   if currentMenu == "addEntry" then
-	lcd.drawText(lcd.getLastPos() + 2, 1, letter, getFieldFlags(0)) --Lipo Entry box
-  elseif lipoCount > 0 and currentMenu == "mainMenu" or currentMenu == "deleteEntry" then
+	lcd.drawText(lcd.getLastPos() + 2, 3, letter, getFieldFlags(0)) --Lipo Entry box
+  elseif lipoCount > 0 and (currentMenu == "mainScreen" or currentMenu == "deleteScreen") then
 	local cFlag
 	if lipoCount > 6 then
 		cFlag = 0
@@ -783,11 +776,11 @@ local function init()
   lipoPacks = {}
   selectedOption = 0
   activeField = 0
-  lineOne = "Lipo:   "
-  lineTwo = "AddEntry"
-  lineThree = "DeleteEntry"
-  lineFour = "Log Data"
-  currentMenu = 'mainMenu'
+  lineOne = "Lipo Pack: "
+  lineTwo = "Write Flight Log"
+  lineThree = ""
+  lineFour = ""
+  currentMenu = 'mainScreen'
   lipoCount = 0
   letter = ' ' 
   curPos = 0
@@ -815,14 +808,14 @@ local function run(event)
     editMode = not editMode
   end
   
-  if currentMenu == "mainMenu" then
-	mainMenu(event)
+  if currentMenu == "menuScreen" then
+	menuScreen(event)
   elseif currentMenu == "addEntry" then
-	addEntryMenu(event)
-  elseif currentMenu == "deleteEntry" then
-	deleteEntryMenu(event)
-  elseif currentMenu == "logMenu" then
-	logMenu(event)
+	addLipoScreen(event)
+  elseif currentMenu == "deleteScreen" then
+	deleteScreen(event)
+  elseif currentMenu == "mainScreen" then
+	mainScreen(event)
   elseif currentMenu == "logView" then
   --viewLog is only called when event has been captured
 	if event == EVT_PLUS_BREAK or event == EVT_PLUS_REPT then
@@ -833,8 +826,8 @@ local function run(event)
 		pageCount = ''
 		curPos    = 0
 		prevPos   = 0
-		currentMenu = 'logMenu'
-		activeField = 1
+		currentMenu = 'menuScreen'
+		activeField = 0
 		prevPage  = 1
 		nextPage  = 2
 	end
