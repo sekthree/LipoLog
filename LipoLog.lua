@@ -1,5 +1,5 @@
 ---------------------------------------------------------------------------------------------
----------						LipoLog v1.1                                  ---------------
+---------						LipoLog v1.2                                  ---------------
 ---------------------------------------------------------------------------------------------
 --	File: LipoLog.lua
 --	Date: April 20, 2017
@@ -37,9 +37,13 @@
 --         Timer1 should be set up if flighttime is needed
 --		   LipoLog should now be availble as one of the telemetry screens
 --
+--  1.1
 --	When adding more than 6 lipos comboBox will no longer drop down, but rather an arrow '>' will 
 --   display next to it, and blink when in edit mode. This is due to the comboBox displaying passed
 --	the displayable area.
+--  1.2
+--  The combobox functionality has been changed to popup menu.
+--
 --  ALL lipos entered in any model will be available to ALL models, however only logs recorded for 
 -- current model will be available to THAT model.
 -----------------------------------------------------------------------------------------------
@@ -69,6 +73,7 @@
 --
 local lipoPacks
 local selectedOption
+local oldSelection
 local editMode
 local activeField
 local fieldMax
@@ -85,6 +90,7 @@ local lineThree
 local lineFour
 local lineFive
 local page
+local popup
 
 ----------------------------------------------------------------------
 -- Function: round
@@ -477,6 +483,9 @@ local function loadData()
 			lipoPacks[count] = lineIn
 		end
 		io.close(liposFile)
+	else
+		liposFile = io.open("/SCRIPTS/LOGS/lipo.dat",'a')
+		io.close(liposFile)
 	end
 	lipoCount = count
 end--[[loadData]]
@@ -505,7 +514,7 @@ end--[[writeData]]
 --	back to file skipping lipo letter passed in. Calls loadData to 
 --	load new list from file.
 ----------------------------------------------------------------------
-local function removeData(oldEntry)
+local function removeData(oldEntry, selectedOption)
 
 	liposFile = io.open("/SCRIPTS/LOGS/lipo.dat",'w')
 	
@@ -516,7 +525,7 @@ local function removeData(oldEntry)
 		--Write stored lipo array to file skipping oldEntry
 		while count < lipoCount do
 			count = count + 1
-			if lipoPacks[count] ~= oldEntry then
+			if lipoPacks[count] ~= oldEntry and count ~= selectedOption + 1 then
 				io.write(liposFile,lipoPacks[count])
 			end
 		end
@@ -636,9 +645,13 @@ end--[[addLipoScreen]]
 local function deleteScreen(event)
 
 	--Exit to top menu if exit is pressed
-	if exitMenu(event) then
+	if exitMenu(event) and not popup then
 		currentMenu = "menuScreen"
 		activeField = 2
+	end
+	
+	if lipoCount <= 0 and activeField == 0 then
+		activeField = 1
 	end
 	
 	lineOne   = 'Select to Delete: '
@@ -649,11 +662,34 @@ local function deleteScreen(event)
 	
 	if editMode then
 		if activeField == 0 then
-			selectedOption = fieldIncDec(event, selectedOption, lipoCount - 1)
-			if selectedOption >= lipoCount then selectedOption = lipoCount - 1 end
+			-- selectedOption = fieldIncDec(event, selectedOption, lipoCount - 1)
+			-- if selectedOption >= lipoCount then selectedOption = lipoCount - 1 end
+			
+			if not popup and event == EVT_ENTER_BREAK then
+				event = 1
+				popup = not popup
+				oldSelection = selectedOption
+			end
+			
+		  --Uncomment this for popup input
+			optInput = popupInput(lineOne..lipoPacks[selectedOption + 1],event,selectedOption,0,lipoCount - 1)
+			
+			if optInput == 'OK' then
+				editMode = not editMode
+				popup = not popup
+				activeField = 0
+			elseif optInput == 'CANCEL' then
+				editMode = not editMode
+				popup = not popup
+				selectedOption = oldSelection
+				activeField = 0
+			else
+				selectedOption = optInput
+			end
+			
 		elseif activeField == 1 then
 			editMode = not editMode
-			removeData(lipoPacks[selectedOption+1])
+			removeData(lipoPacks[selectedOption+1], selectedOption)
 			currentMenu = 'menuScreen'
 			selectedOption = 0
 		elseif activeField == 2 then
@@ -682,7 +718,7 @@ end--[[deleteScreen]]
 -------------------------------------------------------------------
 local function mainScreen(event)
 	
-	--Exit to top menu if exit is pressed
+	--Enter Menu Screen if MENU is pressed
 	if event == EVT_MENU_BREAK then
 		currentMenu = "menuScreen"
 	end
@@ -693,6 +729,11 @@ local function mainScreen(event)
 		lineOne = ""
 		lineTwo = ""
 		lineThree = "Please add a lipo pack"
+		if event == EVT_ENTER_BREAK then
+			currentMenu = 'menuScreen'
+			editMode = not editMode
+			activeField = 1
+		end
 	else
 		lineOne   = 'Lipo Pack: '
 		lineTwo   = 'Write Flight Log'
@@ -704,17 +745,38 @@ local function mainScreen(event)
 	
 	if editMode then
 		if activeField == 0 then
-		  selectedOption = fieldIncDec(event, selectedOption, lipoCount - 1)		  
-		  if selectedOption >= lipoCount then selectedOption = lipoCount - 1 end
+		  -- selectedOption = fieldIncDec(event, selectedOption, lipoCount - 1)		  
+		  -- if selectedOption >= lipoCount then selectedOption = lipoCount - 1 end
+		  if not popup and event == EVT_ENTER_BREAK then
+			event = 0
+			popup = not popup
+			oldSelection = selectedOption
+		  end
+		  --Uncomment this for popup input
+		  optInput = popupInput(lineOne..lipoPacks[selectedOption + 1],event,selectedOption,0,lipoCount - 1)
+		  
+			if optInput == 'OK' then
+				editMode = not editMode
+				popup = not popup
+				activeField = 0
+			elseif optInput == 'CANCEL' then
+				editMode = not editMode
+				popup = not popup
+				selectedOption = oldSelection
+				activeField = 0
+			else
+				selectedOption = optInput
+			end
 		elseif activeField == 1 then
 			editMode = not editMode
 			writeFlightLog()
 			currentMenu = "mainScreen"
 			activeField = 1
-		end
+		end		
 	else
 		activeField = fieldIncDec(event, activeField, fieldMax, true)
 	end
+	
 end--[[mainScreen]]
 
 ---------------------------------------------------------------
@@ -726,41 +788,50 @@ end--[[mainScreen]]
 ---------------------------------------------------------------
 local function draw(currentMenu)
 
- if currentMenu == "mainScreen" then
-	lcd.drawText(40, 55, "Press [MENU] for Options",0)
+ if not popup then
+	
+	 if currentMenu == "mainScreen" then
+		lcd.drawText(40, 55, "Press [MENU] for Options",0)
+	 end
+	  -- draw from the bottom up so we don't overwrite the combo box if open
+	  lcd.drawText(3, 40, lineFour, getFieldFlags(3)) -- mainScreen
+	  lcd.drawText(3, 28, lineThree, getFieldFlags(2)) --DeleteMenu
+	  lcd.drawText(3, 16, lineTwo, getFieldFlags(1)) --addLipoScreen, Confirm, Delete
+	  
+	  if currentMenu == "menuScreen" then
+		lcd.drawText(3,3,lineOne,getFieldFlags(0)) --ViewLogs
+	  else
+		lcd.drawText(3, 3, lineOne, 0) --Lipo, Select to Delete, Name:
+	  end
+	  
+	  if currentMenu == "addEntry" then
+		lcd.drawText(lcd.getLastPos() + 2, 3, letter, getFieldFlags(0)) --Lipo Entry box
+	  elseif lipoCount > 0 and (currentMenu == "mainScreen" or currentMenu == "deleteScreen") then
+	  --need to write the popup logic for this
+				-- local cFlag
+		-- if lipoCount > 6 then
+			-- cFlag = 0
+			-- lcd.drawText(lcd.getLastPos() + 2, 1, '>', getFieldFlags(0)) --Display arrow > when lipo count exceeds 6
+		-- else
+			-- cFlag = getFieldFlags(0)
+		-- end
+		-- lcd.drawCombobox(lcd.getLastPos() + 2, 1, 70, lipoPacks, selectedOption, cFlag)	--Lipo drop down
+		
+		-- comment out the top and uncomment this for popupinput 	
+		-- if not popup then
+			lcd.drawText(lcd.getLastPos() + 2, 1, lipoPacks[selectedOption + 1],getFieldFlags(0))
+		-- end
+		
+	  elseif currentMenu == "logView" then
+		local xPage = 185
+		
+		if prevPage%nextPage >= 100 then xPage = 175
+		elseif prevPage%nextPage >= 10 then xPage = 180 end
+		
+		lcd.drawText(xPage,1,pageCount,0) -- Log page number
+		lcd.drawText(1,52,lineFive,0)
+	  end
  end
-  -- draw from the bottom up so we don't overwrite the combo box if open
-  lcd.drawText(3, 40, lineFour, getFieldFlags(3)) -- mainScreen
-  lcd.drawText(3, 28, lineThree, getFieldFlags(2)) --DeleteMenu
-  lcd.drawText(3, 16, lineTwo, getFieldFlags(1)) --addLipoScreen, Confirm, Delete
-  
-  if currentMenu == "menuScreen" then
-	lcd.drawText(3,3,lineOne,getFieldFlags(0)) --ViewLogs
-  else
-	lcd.drawText(3, 3, lineOne, 0) --Lipo, Select to Delete, Name:
-  end
-  
-  if currentMenu == "addEntry" then
-	lcd.drawText(lcd.getLastPos() + 2, 3, letter, getFieldFlags(0)) --Lipo Entry box
-  elseif lipoCount > 0 and (currentMenu == "mainScreen" or currentMenu == "deleteScreen") then
-	local cFlag
-	if lipoCount > 6 then
-		cFlag = 0
-		lcd.drawText(lcd.getLastPos() + 2, 1, '>', getFieldFlags(0)) --Display arrow > when lipo count exceeds 6
-	else
-		cFlag = getFieldFlags(0)
-	end
-	lcd.drawCombobox(lcd.getLastPos() + 2, 1, 70, lipoPacks, selectedOption, cFlag)	--Lipo drop down
-  elseif currentMenu == "logView" then
-	local xPage = 185
-	
-	if prevPage%nextPage >= 100 then xPage = 175
-	elseif prevPage%nextPage >= 10 then xPage = 180 end
-	
-	lcd.drawText(xPage,1,pageCount,0) -- Log page number
-	lcd.drawText(1,52,lineFive,0)
-  end
-  
 end--[[draw]]
 
 ------------------------------------------------------------
@@ -789,6 +860,7 @@ local function init()
   prevPage = 1
   pageCount = ""
   page = 0
+  optInput = 1
 end--[[init]]
 
 ----------------------------------------------------------
@@ -804,7 +876,7 @@ end--[[init]]
 local function run(event)
   lcd.clear()
   
-  if event == EVT_ENTER_BREAK then
+  if event == EVT_ENTER_BREAK and not popup then
     editMode = not editMode
   end
   
