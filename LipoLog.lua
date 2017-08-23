@@ -1,5 +1,5 @@
 ---------------------------------------------------------------------------------------------
----------						LipoLog v1.2                                  ---------------
+---------						LipoLog v1.3                                  ---------------
 ---------------------------------------------------------------------------------------------
 --	File: LipoLog.lua
 --	Date: April 20, 2017
@@ -30,19 +30,28 @@
 --		viewing currently stored logs, and deleting current log file.
 --	
 --	I will continue to further develop LipoLog for better features. 
+--
+--  FOR FULL INSTRUCTIONS PLEASE VISIT GITHUB WIKI:
+--  https://github.com/sekthree/LipoLog/wiki/LipoLog:-Setup
 --	
 --	SETUP: Create /SCRIPTS/LOGS/ directory. 
---		   Place LipLog.lua in /SCRIPTS/TELEMETRY
+--		   Place LipoLog.lua in /SCRIPTS/TELEMETRY
 --		   Add SCRIPT and assign LipoLog to a telemetry screen
---         Timer1 should be set up if flighttime is needed
+--         Timer1 should be set up if flighttime is needed/wanted
 --		   LipoLog should now be availble as one of the telemetry screens
 --
+--  Version History
 --  1.1
---	When adding more than 6 lipos comboBox will no longer drop down, but rather an arrow '>' will 
---   display next to it, and blink when in edit mode. This is due to the comboBox displaying passed
---	the displayable area.
+--	 When adding more than 6 lipos comboBox will no longer drop down, but rather an arrow '>' will 
+--    display next to it, and blink when in edit mode. This is due to the comboBox displaying passed
+--	  the displayable area.
 --  1.2
---  The combobox functionality has been changed to popup menu.
+--   The combobox functionality has been changed to popup menu.
+--  1.3
+--   Single letter input for a lipo has been changed to string input (7 characters).
+--   Added numbers to available input
+--   Writing to lipo file has been altered to encorporate new longer name/string, as well as reading from file.
+--   Prevent duplicate entries, display error when encountereds
 --
 --  ALL lipos entered in any model will be available to ALL models, however only logs recorded for 
 -- current model will be available to THAT model.
@@ -77,6 +86,7 @@ local oldSelection
 local editMode
 local activeField
 local fieldMax
+local charMax
 local currentMenu
 local letter
 local lipoCount
@@ -89,8 +99,15 @@ local lineTwo
 local lineThree
 local lineFour
 local lineFive
+local lineSix
 local page
 local popup
+local lipoEdit
+local wordMax
+local letterPos
+local activeLetter
+local lipoName
+local lipoNameArray
 
 ----------------------------------------------------------------------
 -- Function: round
@@ -112,7 +129,7 @@ end --[[round]]
 ----------------------------------------------------------------------
 local function valueIncDec(event,min,max,step)
  
-	local letters = {' ','A','B','C','D','E','F','G','H','I','J','K','L','M','N','O','P','Q','R','S','T','U','V','W','X','Y','Z'}
+	local letters = {' ','A','B','C','D','E','F','G','H','I','J','K','L','M','N','O','P','Q','R','S','T','U','V','W','X','Y','Z','0','1','2','3','4','5','6','7','8','9'}
  
 	if selectedSize == nil then selectedSize = 1 end
  
@@ -198,18 +215,94 @@ local function getFieldFlags(menuItem)
 
     local flg = 0
 	
-    if activeField == menuItem then
-      flg=INVERS
-      if editMode then
-        flg=INVERS+BLINK
-      end
+	if lipoEdit == true and activeLetter == menuItem then
+		flg=INVERS
+		if editMode then
+			flg=INVERS+BLINK
+		end	
+	elseif lipoEdit == false and activeField == menuItem then
+		flg=INVERS
+		if editMode then
+			flg=INVERS+BLINK
+		end
     end
     return flg
 end--[[getFieldFlags]]
 
 ----------------------------------------------------------------------
+-- Function: getNextLetter
+-- Parameters: none
+-- Desc: Sets selectedSize to value of the next letter so when valueIncDec
+--   is called in lipoEntry, letter isn't reset to previous letter
+--
+----------------------------------------------------------------------
+local function getNextLetter()
+
+	local count = 0
+	local letters = {' ','A','B','C','D','E','F','G','H','I','J','K','L','M','N','O','P','Q','R','S','T','U','V','W','X','Y','Z','0','1','2','3','4','5','6','7','8','9'}
+	
+	if selectedSize == nil then selectedSize = 1
+	elseif letter ~= letters[selectedSize] then
+		while letter ~= letters[count] do
+			count = count + 1
+		end
+		selectedSize = count
+	end
+
+end--[[getNextLetter]]
+
+----------------------------------------------------------------------
+-- Function: setLipoName
+-- Parameters: none
+-- Desc: sets the global variable lipoName from lipoNameArray
+--
+----------------------------------------------------------------------
+local function setLipoName()
+
+	local count = 1
+
+	lipoName = lipoNameArray[count]
+
+	while count < wordMax do
+		count = count  + 1
+		lipoName = lipoName..lipoNameArray[count]
+	end
+
+end--[[setLipoName]]
+
+----------------------------------------------------------------------
+-- Function: lipoEntry
+-- Parameters: event
+-- Desc: Allows for a string to be entered on screen
+--
+----------------------------------------------------------------------
+local function lipoEntry(event)
+
+	if event == EVT_ENTER_BREAK and letterPos < wordMax and lipoEdit == true then
+		letterPos = letterPos + 1
+		letter = lipoNameArray[letterPos]
+		activeLetter = activeLetter + 1
+		getNextLetter()
+	elseif event == EVT_ENTER_BREAK and letterPos >= wordMax then
+		letterPos = 1
+		lipoEdit = false
+		editMode = not editMode
+		fieldMax = 1
+		activeLetter = 0 
+		letter = lipoNameArray[1]
+		getNextLetter()
+		setLipoName()
+	else
+		letter = valueIncDec(event,1,charMax,1)
+		lipoNameArray[letterPos] = letter
+		lipoEdit = true
+	end
+end--[[lipoEntry]]
+
+----------------------------------------------------------------------
 -- Function: exitMenu(event)
 -- Parameters: event
+-- Returns: boolean
 -- Desc: Determines whether exit button has been pressed
 --
 ----------------------------------------------------------------------
@@ -217,6 +310,7 @@ local function exitMenu(event)
 
 	if event == EVT_EXIT_BREAK then return true end
 	return false
+	
 end--[[exitMenu]]
 
 ----------------------------------------------------------------------
@@ -287,7 +381,9 @@ local function deleteFlightLogs()
 	local logFile  = io.open(logDir, 'w')
 	
 	if logFile ~= nil then io.close(logFile) end
-end
+	
+end--[[deleteFlightLogs]]
+
 ----------------------------------------------------------------------
 -- Function: loadRecordPositions
 -- Parameters: none
@@ -477,7 +573,7 @@ local function loadData()
 	
 	if liposFile ~= nil then
 		while true do
-			lineIn = io.read(liposFile,1)
+			lineIn = io.read(liposFile,7)
 			if #lineIn == 0 then break end
 			count = count + 1
 			lipoPacks[count] = lineIn
@@ -489,6 +585,27 @@ local function loadData()
 	end
 	lipoCount = count
 end--[[loadData]]
+
+----------------------------------------------------------------------
+-- Function: isDuplicate
+-- Parameters: entryName
+-- Returns: boolean
+-- Desc: Given an entryName search through current lipo array and return
+--   if entry is duplicate name
+----------------------------------------------------------------------
+local function isDuplicate(entryName)
+	local count = 0
+	
+	while count < lipoCount do
+		count = count + 1
+		if lipoPacks[count] == entryName then 
+			lineSix = "Error: Duplicate Entry"
+			return true 
+		end
+	end
+	
+	return false
+end--[[isDuplicate]]
 
 ----------------------------------------------------------------------
 -- Function: writeData
@@ -504,6 +621,7 @@ local function writeData(newEntry)
 		io.write(liposFile,newEntry)
 		io.close(liposFile)
 	end
+	
 end--[[writeData]]
 
 ----------------------------------------------------------------------
@@ -549,7 +667,7 @@ local function deleteLipoData()
 	if liposFile ~= nil then io.close(liposFile) end
 
 	loadData()
-end
+end--[[deleteLipoData]]
 
 ----------------------------------------------------------------------
 -- Function: menuScreen
@@ -606,14 +724,17 @@ local function addLipoScreen(event)
 	if exitMenu(event) then
 		currentMenu = "menuScreen"
 		activeField = 1
+		editMode = false
+		lipoEdit = false
 	end
 	
 	lineOne   = 'Name: '
 	lineThree = ''
 	lineFour  = ''
+	lineSix = ''
 	fieldMax  = 1
 	
-	if letter == nil or letter == " " then
+	if lipoName == nil or lipoName == " " or lipoName == "       " then
 		lineTwo = ''
 		if activeField == 1 then activeField = 0 end
 	else
@@ -622,9 +743,9 @@ local function addLipoScreen(event)
 	
 	if editMode then
 		if activeField == 0 then
-			letter = valueIncDec(event,1, 27, 1)
-		elseif activeField == 1 then
-			writeData(letter)
+			lipoEntry(event)
+		elseif activeField == 1 and isDuplicate(lipoName) == false then
+			writeData(lipoName)
 			loadData()
 			editMode = not editMode
 			currentMenu = 'menuScreen'
@@ -662,8 +783,6 @@ local function deleteScreen(event)
 	
 	if editMode then
 		if activeField == 0 then
-			-- selectedOption = fieldIncDec(event, selectedOption, lipoCount - 1)
-			-- if selectedOption >= lipoCount then selectedOption = lipoCount - 1 end
 			
 			if not popup and event == EVT_ENTER_BREAK then
 				event = 1
@@ -671,7 +790,7 @@ local function deleteScreen(event)
 				oldSelection = selectedOption
 			end
 			
-		  --Uncomment this for popup input
+		  --popup window for selecting lipo
 			optInput = popupInput(lineOne..lipoPacks[selectedOption + 1],event,selectedOption,0,lipoCount - 1)
 			
 			if optInput == 'OK' then
@@ -742,6 +861,7 @@ local function mainScreen(event)
 	end
 	
 	lineFour  = ""
+	lineSix = "Press [MENU] for Options"
 	
 	if editMode then
 		if activeField == 0 then
@@ -789,38 +909,46 @@ end--[[mainScreen]]
 local function draw(currentMenu)
 
  if not popup then
+	local drawPos = 1
+	local drawLoc = 33
+	local drawInv = 6
+	local flagField = 0
 	
-	 if currentMenu == "mainScreen" then
-		lcd.drawText(40, 55, "Press [MENU] for Options",0)
+	 if currentMenu == "mainScreen" or currentMenu == "addEntry" then
+		lcd.drawText(40, 55, lineSix,0) -- Menu Option, Error
 	 end
-	  -- draw from the bottom up so we don't overwrite the combo box if open
-	  lcd.drawText(3, 40, lineFour, getFieldFlags(3)) -- mainScreen
-	  lcd.drawText(3, 28, lineThree, getFieldFlags(2)) --DeleteMenu
-	  lcd.drawText(3, 16, lineTwo, getFieldFlags(1)) --addLipoScreen, Confirm, Delete
+	  -- draw from the bottom up
+	  lcd.drawText(3, 40, lineFour, getFieldFlags(3)) -- flightLog, deleteLogs
+	  lcd.drawText(3, 28, lineThree, getFieldFlags(2)) --deleteThings, AddLipo,deleteLipos, flightLog
+	  
+	  if lipoEdit then
+		lcd.drawText(3,16,lineTwo,0) --confirm
+	  else
+		lcd.drawText(3,16,lineTwo,getFieldFlags(1)) --AddLipo, delete lipo,writeLog, flightLog
+	  end
 	  
 	  if currentMenu == "menuScreen" then
 		lcd.drawText(3,3,lineOne,getFieldFlags(0)) --ViewLogs
 	  else
-		lcd.drawText(3, 3, lineOne, 0) --Lipo, Select to Delete, Name:
+		lcd.drawText(3,3, lineOne, 0) --Lipo, Select to Delete, Name:
 	  end
 	  
 	  if currentMenu == "addEntry" then
-		lcd.drawText(lcd.getLastPos() + 2, 3, letter, getFieldFlags(0)) --Lipo Entry box
-	  elseif lipoCount > 0 and (currentMenu == "mainScreen" or currentMenu == "deleteScreen") then
-	  --need to write the popup logic for this
-				-- local cFlag
-		-- if lipoCount > 6 then
-			-- cFlag = 0
-			-- lcd.drawText(lcd.getLastPos() + 2, 1, '>', getFieldFlags(0)) --Display arrow > when lipo count exceeds 6
-		-- else
-			-- cFlag = getFieldFlags(0)
-		-- end
-		-- lcd.drawCombobox(lcd.getLastPos() + 2, 1, 70, lipoPacks, selectedOption, cFlag)	--Lipo drop down
+		if lipoEdit then
+			fieldMax = 2
+			while drawPos <= wordMax do
+				lcd.drawText(drawLoc,3,lipoNameArray[drawPos],getFieldFlags(flagField))
+				drawLoc = drawLoc + drawInv
+				drawPos = drawPos + 1
+				flagField = flagField + 1
+			end
+		else
+			lcd.drawText(33,3,lipoName,getFieldFlags(0))
+		end
 		
-		-- comment out the top and uncomment this for popupinput 	
-		-- if not popup then
-			lcd.drawText(lcd.getLastPos() + 2, 1, lipoPacks[selectedOption + 1],getFieldFlags(0))
-		-- end
+	  elseif lipoCount > 0 and (currentMenu == "mainScreen" or currentMenu == "deleteScreen") then
+
+		lcd.drawText(lcd.getLastPos() + 2, 3, lipoPacks[selectedOption + 1],getFieldFlags(0))
 		
 	  elseif currentMenu == "logView" then
 		local xPage = 185
@@ -844,6 +972,7 @@ local function init()
 
   recPos = {}
   fieldMax = 2
+  charMax = 37
   lipoPacks = {}
   selectedOption = 0
   activeField = 0
@@ -851,6 +980,8 @@ local function init()
   lineTwo = "Write Flight Log"
   lineThree = ""
   lineFour = ""
+  lineFive = ""
+  lineSix = ""
   currentMenu = 'mainScreen'
   lipoCount = 0
   letter = ' ' 
@@ -861,6 +992,14 @@ local function init()
   pageCount = ""
   page = 0
   optInput = 1
+  lipoEdit = false
+  wordMax = 7
+  letterPos = 1
+  activeLetter = 0
+  lipoName = " "
+  lipoNameArray = {' ',' ',' ',' ',' ',' ',' '}
+  setLipoName()
+  
 end--[[init]]
 
 ----------------------------------------------------------
@@ -876,7 +1015,7 @@ end--[[init]]
 local function run(event)
   lcd.clear()
   
-  if event == EVT_ENTER_BREAK and not popup then
+  if event == EVT_ENTER_BREAK and not popup and lipoEdit == false then
     editMode = not editMode
   end
   
